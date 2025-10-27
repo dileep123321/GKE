@@ -3,10 +3,10 @@ kind: Service
 metadata:
   name: nginx-service
 spec:
+  type: LoadBalancer   # change to ClusterIP if you prefer using Ingress
   selector:
     app: nginx
-  type: LoadBalancer
   ports:
-  - protocol: TCP
-    port: 80
+  - port: 80
     targetPort: 80
+    protocol: TCP

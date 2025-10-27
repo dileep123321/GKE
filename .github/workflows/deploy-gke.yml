@@ -1,0 +1,76 @@
+name: Build & Deploy to GKE
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: modern-saga-472703-k3
+  CLUSTER_NAME: test-demo-cluster
+  CLUSTER_ZONE: us-central1-a
+  REGION: us-central1
+  REPO_NAME: nginx-repo
+  IMAGE_NAME: nginx-demo
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # ----------------------------------------------------------
+    # Step 1 — Checkout the code
+    # ----------------------------------------------------------
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # ----------------------------------------------------------
+    # Step 2 — Authenticate to Google Cloud
+    # ----------------------------------------------------------
+    - name: Set up gcloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ env.PROJECT_ID }}
+        export_default_credentials: true
+
+    # ----------------------------------------------------------
+    # Step 3 — Build and push Docker image to Artifact Registry
+    # ----------------------------------------------------------
+    - name: Build and push Docker image
+      run: |
+        SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+        IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+
+        echo "Building image: ${IMAGE_URI}"
+        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+        docker build -t "${IMAGE_URI}" .
+        docker push "${IMAGE_URI}"
+
+        echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+
+    # ----------------------------------------------------------
+    # Step 4 — Get GKE credentials
+    # ----------------------------------------------------------
+    - name: Get GKE credentials
+      run: |
+        gcloud container clusters get-credentials "${{ env.CLUSTER_NAME }}" \
+          --zone "${{ env.CLUSTER_ZONE }}" \
+          --project "${{ env.PROJECT_ID }}"
+
+    # ----------------------------------------------------------
+    # Step 5 — Deploy to GKE
+    # ----------------------------------------------------------
+    - name: Deploy Nginx to GKE
+      run: |
+        # Replace image placeholder in deployment manifest dynamically
+        envsubst < k8s/deployment.yaml | kubectl apply -f -
+        kubectl apply -f k8s/service.yaml
+        kubectl rollout status deployment/nginx-deployment
+
+    # ----------------------------------------------------------
+    # Step 6 — Verify deployment and show service details
+    # ----------------------------------------------------------
+    - name: Show service info
+      run: |
+        kubectl get svc nginx-service -o wide
