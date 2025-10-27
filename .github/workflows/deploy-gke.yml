@@ -20,7 +20,7 @@ jobs:
           gcloud config set compute/zone us-central1-a
 
       - name: Get GKE credentials
-        run: gcloud container clusters get-credentials nginx-cluster --zone us-central1-a --project modern-saga-472703-k3
+        run: gcloud container clusters get-credentials test-demo-cluster --zone us-central1-a --project modern-saga-472703-k3
 
       - name: Deploy NGINX to GKE
         run: |
