@@ -1,45 +1,32 @@
-name: deploy-to-gke
+name: Deploy NGINX to GKE
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
+    name: Deploy to GKE
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1 - Checkout repo
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2 - Authenticate to Google Cloud
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_CREDENTIALS }}  # 👈 replace with your secret name
-
-      # Step 3 - Set up Google Cloud SDK
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
           project_id: modern-saga-472703-k3
-          export_default_credentials: true
 
-      # Step 4 - Install GKE Auth Plugin
-      - name: Install GKE auth plugin
-        run: gcloud components install gke-gcloud-auth-plugin --quiet
-
-      # Step 5 - Get GKE credentials
       - name: Get GKE credentials
-        run: |
-          gcloud container clusters get-credentials test-demo-cluster \
-            --zone us-central1-a \
-            --project modern-saga-472703-k3
+        run: gcloud container clusters get-credentials test-demo-cluster --zone us-central1-a --project modern-saga-472703-k3
 
-      # Step 6 - Deploy to GKE
-      - name: Deploy to GKE
+      - name: Deploy NGINX manifests
         run: |
-          kubectl apply -f k8s/
-          kubectl get pods
-          kubectl get svc
+          kubectl apply -f k8s/nginx-deployment.yaml
+          kubectl apply -f k8s/nginx-service.yaml
+
+      - name: Verify deployment
+        run: kubectl get pods,svc
