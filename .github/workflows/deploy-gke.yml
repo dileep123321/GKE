@@ -1,84 +1,35 @@
-name: Build & Deploy to GKE
+name: build-and-deploy
 
 on:
   push:
     branches: [ main ]
-
-env:
-  PROJECT_ID: modern-saga-472703-k3
-  CLUSTER_NAME: test-demo-cluster
-  CLUSTER_ZONE: us-central1-a
-  REGION: us-central1
-  REPO_NAME: nginx-repo
-  IMAGE_NAME: nginx-demo
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    # ----------------------------------------------------------
-    # Step 1 — Checkout code
-    # ----------------------------------------------------------
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    # ----------------------------------------------------------
-    # Step 2 — Authenticate with Google Cloud
-    # ----------------------------------------------------------
-    - name: Set up gcloud SDK
-      uses: google-github-actions/setup-gcloud@v1
-      with:
-        service_account_key: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ env.PROJECT_ID }}
-        export_default_credentials: true
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: modern-saga-472703-k3
+          service_account_key: ${{ secrets.GCP_KEY }}
+          export_default_credentials: true
 
-    # ----------------------------------------------------------
-    # Step 3 — Build and push Docker image to Artifact Registry
-    # ----------------------------------------------------------
-    - name: Build and push Docker image
-      run: |
-        # Generate short commit SHA for tagging
-        SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-        IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-        echo "🔧 Building image: ${IMAGE_URI}"
+      - name: Build Docker image
+        run: docker build -t us-central1-docker.pkg.dev/modern-saga-472703-k3/nginx-repo/nginx-demo:v1 .
 
-        # Authenticate Docker with Artifact Registry
-        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - name: Push Docker image
+        run: docker push us-central1-docker.pkg.dev/modern-saga-472703-k3/nginx-repo/nginx-demo:v1
 
-        # Verify authentication (for debugging)
-        echo "🧩 Checking Docker auth config:"
-        cat ~/.docker/config.json | grep ${{ env.REGION }}-docker.pkg.dev || echo "⚠️ Auth not found!"
+      - name: Get GKE credentials
+        run: gcloud container clusters get-credentials postgres-demo-cluster --zone us-central1-a --project modern-saga-472703-k3
 
-        # Build and push image
-        docker build -t "${IMAGE_URI}" .
-        docker push "${IMAGE_URI}"
-
-        # Pass image URI to next step
-        echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
-
-    # ----------------------------------------------------------
-    # Step 4 — Get GKE credentials
-    # ----------------------------------------------------------
-    - name: Get GKE credentials
-      run: |
-        gcloud container clusters get-credentials "${{ env.CLUSTER_NAME }}" \
-          --zone "${{ env.CLUSTER_ZONE }}" \
-          --project "${{ env.PROJECT_ID }}"
-
-    # ----------------------------------------------------------
-    # Step 5 — Deploy to GKE
-    # ----------------------------------------------------------
-    - name: Deploy Nginx to GKE
-      run: |
-        # Substitute IMAGE_URI dynamically in manifest
-        envsubst < k8s/deployment.yaml | kubectl apply -f -
-        kubectl apply -f k8s/service.yaml
-        kubectl rollout status deployment/nginx-deployment
-
-    # ----------------------------------------------------------
-    # Step 6 — Show service info
-    # ----------------------------------------------------------
-    - name: Show service info
-      run: kubectl get svc nginx-service -o wide
+      - name: Deploy to GKE
+        run: kubectl apply -f k8s/nginx-deployment.yml
