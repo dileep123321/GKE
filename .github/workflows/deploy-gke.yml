@@ -18,13 +18,13 @@ jobs:
 
     steps:
     # ----------------------------------------------------------
-    # Step 1 — Checkout the code
+    # Step 1 — Checkout code
     # ----------------------------------------------------------
     - name: Checkout code
       uses: actions/checkout@v4
 
     # ----------------------------------------------------------
-    # Step 2 — Authenticate to Google Cloud
+    # Step 2 — Authenticate with Google Cloud
     # ----------------------------------------------------------
     - name: Set up gcloud SDK
       uses: google-github-actions/setup-gcloud@v1
@@ -38,15 +38,24 @@ jobs:
     # ----------------------------------------------------------
     - name: Build and push Docker image
       run: |
+        # Generate short commit SHA for tagging
         SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
         IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
 
-        echo "Building image: ${IMAGE_URI}"
+        echo "🔧 Building image: ${IMAGE_URI}"
+
+        # Authenticate Docker with Artifact Registry
         gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+        # Verify authentication (for debugging)
+        echo "🧩 Checking Docker auth config:"
+        cat ~/.docker/config.json | grep ${{ env.REGION }}-docker.pkg.dev || echo "⚠️ Auth not found!"
+
+        # Build and push image
         docker build -t "${IMAGE_URI}" .
         docker push "${IMAGE_URI}"
 
+        # Pass image URI to next step
         echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
 
     # ----------------------------------------------------------
@@ -63,14 +72,13 @@ jobs:
     # ----------------------------------------------------------
     - name: Deploy Nginx to GKE
       run: |
-        # Replace image placeholder in deployment manifest dynamically
+        # Substitute IMAGE_URI dynamically in manifest
         envsubst < k8s/deployment.yaml | kubectl apply -f -
         kubectl apply -f k8s/service.yaml
         kubectl rollout status deployment/nginx-deployment
 
     # ----------------------------------------------------------
-    # Step 6 — Verify deployment and show service details
+    # Step 6 — Show service info
     # ----------------------------------------------------------
     - name: Show service info
-      run: |
-        kubectl get svc nginx-service -o wide
+      run: kubectl get svc nginx-service -o wide
