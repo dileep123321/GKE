@@ -22,9 +22,12 @@ jobs:
 
       - name: Install gke-gcloud-auth-plugin
         run: |
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+          sudo apt-get install -y apt-transport-https ca-certificates gnupg
+          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
           sudo apt-get update
-          sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
-          export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+          sudo apt-get install -y google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
 
       - name: Get GKE credentials
         run: |
@@ -32,7 +35,6 @@ jobs:
 
       - name: Deploy NGINX manifests
         run: |
-          export USE_GKE_GCLOUD_AUTH_PLUGIN=True
           kubectl apply -f k8s/nginx-deployment.yaml
           kubectl apply -f k8s/nginx-service.yaml
 
