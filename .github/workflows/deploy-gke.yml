@@ -12,6 +12,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Step 1: Install and configure GKE auth plugin
+      - name: Install GKE auth plugin
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
+
+      # Step 2: Decode and authenticate service account
       - name: Decode and configure GCP credentials
         run: |
           echo "${{ secrets.GCP_SA_KEY }}" | base64 --decode > ${HOME}/key.json
@@ -19,10 +27,17 @@ jobs:
           gcloud config set project modern-saga-472703-k3
           gcloud config set compute/zone us-central1-a
 
+      # Step 3: Connect to your GKE cluster
       - name: Get GKE credentials
         run: gcloud container clusters get-credentials test-demo-cluster --zone us-central1-a --project modern-saga-472703-k3
 
+      # Step 4: Deploy NGINX manifests
       - name: Deploy NGINX to GKE
         run: |
           kubectl apply -f k8s/nginx-deployment.yaml
           kubectl apply -f k8s/nginx-service.yaml
+
+      # Step 5: Verify deployment
+      - name: Verify NGINX deployment
+        run: |
+          kubectl get pods,svc
