@@ -14,23 +14,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ✅ Authenticate to Google Cloud using the service account key
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # ✅ Set up gcloud CLI
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
           project_id: modern-saga-472703-k3
-          export_default_credentials: true
 
+      # ✅ Connect kubectl to GKE
       - name: Configure kubectl for GKE
-        run: |
-          gcloud container clusters get-credentials test-demo-cluster \
-            --zone us-central1-a \
-            --project modern-saga-472703-k3
+        run: gcloud container clusters get-credentials test-demo-cluster --zone us-central1-a --project modern-saga-472703-k3
 
+      # ✅ Deploy manifests
       - name: Deploy NGINX manifests
         run: |
           kubectl apply -f k8s/nginx-deployment.yaml
           kubectl apply -f k8s/nginx-service.yaml
 
+      # ✅ Verify
       - name: Verify deployment
         run: kubectl get pods,svc
